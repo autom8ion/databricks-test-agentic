@@ -34,7 +34,7 @@ uv pip install -r requirements.txt
 cp .env.example .env   # fill in your workspace host/token/compute
 
 # Unit tests (Layer 1) — separate venv, no workspace needed
-uv venv .venv-unit --python 3.12 && source .venv-unit/bin/activate
+uv venv .venv-unit && source .venv-unit/bin/activate
 uv pip install -r requirements-unit.txt
 ```
 

@@ -18,23 +18,27 @@ PySpark) cannot be installed in the same virtualenv — Databricks Connect
 replaces the `pyspark` package with a remote-only client. Both are managed
 with [uv](https://docs.astral.sh/uv/) as two separate `uv venv` + `uv pip
 install` environments, **not** a single `uv sync`/`uv.lock` project: a
-shared lock forces one dependency resolution to satisfy both files, and
-`requirements-unit.txt`'s exact `pandas==2.1.4` pin then gets pulled into
-the integration env too, where it has no prebuilt wheel and fails to build
-from source. If you're tempted to add a `[project]`/`[dependency-groups]`
-table to `pyproject.toml` to "properly" manage this as one uv project,
-don't — this was tried and reverted for exactly that reason.
+shared lock forces one dependency resolution to satisfy both files, which
+broke a previous pandas version pin (needed only in `requirements-unit.txt`)
+in the integration env. If you're tempted to add a
+`[project]`/`[dependency-groups]` table to `pyproject.toml` to "properly"
+manage this as one uv project, don't — this was tried and reverted for
+exactly that reason.
 
-- Editing/running `tests/unit/**` → use `.venv-unit` (`uv venv .venv-unit --python 3.12 && uv pip install -r requirements-unit.txt`).
+Both environments currently target Python 3.14 (`uv venv`'s default here).
+
+- Editing/running `tests/unit/**` → use `.venv-unit` (`uv venv .venv-unit && uv pip install -r requirements-unit.txt`).
 - Editing/running `tests/integration/**` or `src/dbx_tests/{connector,sample_data}.py` → use `.venv` (`uv venv .venv && uv pip install -r requirements.txt`).
 - Never add a bare `pyspark` dependency to `requirements.txt`, and never add `databricks-connect` to `requirements-unit.txt`.
 - `pyproject.toml` deliberately has no default `testpaths` — always run `pytest tests/unit` or `pytest tests/integration` explicitly, never bare `pytest`.
 
-If you touch `requirements-unit.txt`, know that pandas is pinned
-(`pandas==2.1.4`) because `pyspark.testing.assertDataFrameEqual` transitively
-imports pyspark's pandas-on-Spark compat layer, which breaks on pandas>=2.2
-as of pyspark 4.0.1. Don't loosen that pin without re-running
-`pytest tests/unit` in a clean venv first.
+`requirements-unit.txt` requires `pyspark>=4.2`: earlier pyspark 4.0.x's
+pandas-on-Spark compat layer (a transitive import of
+`pyspark.testing.assertDataFrameEqual`) broke on pandas>=2.2, and pandas
+versions old enough to avoid that have no Python 3.14 wheel. pyspark>=4.2
+resolves against current pandas fine (just a `FutureWarning` about
+pandas>=3.0 support, not an error). Don't drop below `pyspark>=4.2` in that
+file without re-running `pytest tests/unit` in a clean venv first.
 
 ## Conventions
 

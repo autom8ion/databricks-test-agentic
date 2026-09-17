@@ -11,7 +11,7 @@ wants — "run the tests" with no other signal means run both.
 
 ## Layer 1 — unit tests (no Databricks needed)
 
-1. `uv venv .venv-unit --python 3.12 && source .venv-unit/bin/activate` (skip venv creation if it already exists — just activate it).
+1. `uv venv .venv-unit && source .venv-unit/bin/activate` (skip venv creation if it already exists — just activate it).
 2. `uv pip install -r requirements-unit.txt`.
 3. `pytest tests/unit -v`.
 4. These should always pass; a failure here is a real bug in `src/dbx_tests/transforms.py`, not a config/environment issue.
