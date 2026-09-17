@@ -12,10 +12,10 @@ them.
 
 | Layer | What | Where | Needs |
 |---|---|---|---|
-| 1. Unit | Pure transform functions (`DataFrame -> DataFrame`), local Spark | `tests/unit/` | `requirements-unit.txt`, no Databricks |
+| 1. Unit | Pure transform functions (`DataFrame -> DataFrame`), local Spark: example-based, property-based (Hypothesis), and schema-contract (syrupy) tests | `tests/unit/` | `requirements-unit.txt`, no Databricks |
 | 2. Integration | Connectivity, schema drift, data quality, freshness, roundtrip, referential integrity | `tests/integration/` | `requirements.txt`, a real workspace |
 | 3. In-pipeline expectations | Lakeflow Declarative Pipelines constraints, enforced on every production load | `pipelines/*.sql` | Deployed as a pipeline, not run by pytest |
-| 4. Reconciliation | Delta time-travel control-total comparisons | `tests/integration/test_reconciliation.py` | Same as Layer 2 |
+| 4. Reconciliation | Delta time-travel control-total comparisons, at both small and realistic (polars-generated) volume | `tests/integration/test_reconciliation*.py` | Same as Layer 2 |
 | 5. Streaming | `availableNow` triggers, checkpoint recovery, idempotent MERGE | `tests/integration/test_streaming.py` | Same as Layer 2 |
 
 **Layer 1 and Layers 2/4/5 must run in separate Python environments.**
@@ -61,9 +61,13 @@ tables under `DBX_TEST_CATALOG.DBX_TEST_SCHEMA`.
 
 ## What's tested
 
-**Layer 1 — unit** (`tests/unit/test_transforms.py`): `normalize_prices`,
-`flag_high_value_orders`, `dedupe_by_key` — pure functions in
-`src/dbx_tests/transforms.py`, checked with `pyspark.testing.assertDataFrameEqual`.
+**Layer 1 — unit** (`tests/unit/`), three complementary styles against the
+same pure functions in `src/dbx_tests/transforms.py`:
+- **Example-based** (`test_transforms.py`) — hand-picked inputs, checked with `pyspark.testing.assertDataFrameEqual`.
+- **Property-based** (`test_transforms_properties.py`, [Hypothesis](https://hypothesis.readthedocs.io/)) — generates hundreds of inputs (arbitrary prices/currencies/keys) and checks invariants (e.g. "output is never `GBp`", "exactly one row per key, always the max") instead of a handful of examples — catches edge cases hand-picked examples miss.
+- **Schema contracts** (`test_transform_contracts.py`, [syrupy](https://github.com/tophat/syrupy)) — snapshots each transform's *output schema*, so an unintended column/type change shows as a snapshot diff instead of silently reaching downstream consumers (the "schema evolution with `mergeSchema` can silently add columns" pitfall). Accept an intentional change with `pytest tests/unit/test_transform_contracts.py --snapshot-update`.
+
+Run with coverage: `pytest tests/unit --cov=dbx_tests --cov-report=term-missing`.
 
 **Layer 2 — integration** (`tests/integration/`):
 - **Connectivity** (`test_connectivity.py`) — can connect, list catalogs/schemas.
@@ -83,9 +87,10 @@ alternative worth knowing for quarantine/annotate-style checks with a rule
 profiler, but it's an unsupported Labs project and isn't wired into this
 repo.
 
-**Layer 4 — reconciliation** (`tests/integration/test_reconciliation.py`):
-compares Delta table versions via time travel to prove a change didn't alter
-control totals it shouldn't have.
+**Layer 4 — reconciliation**: compares Delta table versions via time travel
+to prove a change didn't alter control totals it shouldn't have.
+- `test_reconciliation.py` — small scale (~200 orders), runs on every merge.
+- `test_reconciliation_bulk.py` — ~500k orders generated with [polars](https://pola.rs/) (`src/dbx_tests/bulk_data.py`; plain-Python row-by-row generation doesn't scale to that volume), catching data-skew/performance issues a small fixture can't. Skipped unless `DBX_TESTS_RUN_BULK=1` — meant for the nightly job, not every merge: `DBX_TESTS_RUN_BULK=1 pytest tests/integration/test_reconciliation_bulk.py -v`.
 
 **Layer 5 — streaming** (`tests/integration/test_streaming.py`):
 `availableNow` trigger draining, checkpoint-recovery duplicate detection,
@@ -117,9 +122,23 @@ python -m dbx_tests.sample_data
 ## CI mapping
 
 - **Pull request:** Layer 1 unit tests — local, seconds, no cluster.
-- **Merge to main:** Layer 2 integration tests against a test workspace/catalog.
-- **Nightly:** Layer 4 reconciliation at realistic data volume.
+- **Merge to main:** Layer 2 integration tests (plus the small-scale `test_reconciliation.py`) against a test workspace/catalog.
+- **Nightly:** `test_reconciliation_bulk.py` (`DBX_TESTS_RUN_BULK=1`) — Layer 4 at realistic data volume.
 - **Every production load:** Layer 3 expectations, running inside the pipeline itself.
+
+## Library choices
+
+Added beyond the base `pytest`/Databricks Connect/PySpark stack, each for a
+specific gap rather than by default:
+- **[Hypothesis](https://hypothesis.readthedocs.io/)** — property-based tests for the pure transforms (Layer 1).
+- **[syrupy](https://github.com/tophat/syrupy)** — schema-contract snapshots for the pure transforms (Layer 1).
+- **[polars](https://pola.rs/)** — fast synthetic data generation at realistic volume for nightly reconciliation (Layer 4). Not used for the small-scale seed (`sample_data.py`) — plain Python is simpler and plenty fast at that size.
+- **pytest-cov** — coverage reporting for Layer 1 (`--cov=dbx_tests`).
+
+Considered and deliberately **not** added:
+- **Great Expectations** — would duplicate what Layer 2 (plain `assert`) and Layer 3 (native Lakeflow expectations) already cover; see the rule in `.claude/agents/databricks-test-writer.md`. [DQX](https://github.com/databrickslabs/dqx) remains the noted alternative if a rule-profiler/quarantine workflow is ever needed.
+- **chispa** — pyspark's built-in `pyspark.testing.assertDataFrameEqual` (used throughout Layer 1) already covers what chispa is for; adding both would be redundant.
+- **Faker** — the hardcoded name/country/status lists in `sample_data.py` are already plausible and deterministic; Faker would add a dependency for a cosmetic improvement, not a capability gap.
 
 ## Claude Code integration
 

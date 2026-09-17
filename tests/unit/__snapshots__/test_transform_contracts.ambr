@@ -1,0 +1,10 @@
+# serializer version: 1
+# name: test_dedupe_by_key_schema_contract
+  'struct<order_id:int,updated_at:string,label:string>'
+# ---
+# name: test_flag_high_value_orders_schema_contract
+  'struct<order_id:int,amount:double,is_high_value:boolean>'
+# ---
+# name: test_normalize_prices_schema_contract
+  'struct<ticker:string,price:double,currency:string>'
+# ---

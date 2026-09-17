@@ -1,3 +1,8 @@
 databricks-connect>=15.4,<16
 pytest>=8
 python-dotenv>=1
+
+# Fast vectorized synthetic data generation for realistic-volume testing
+# (src/dbx_tests/bulk_data.py) — plain-Python row-by-row generation
+# (sample_data.py) doesn't scale to hundreds of thousands of rows.
+polars>=1
