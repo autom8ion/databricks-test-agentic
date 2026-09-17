@@ -1,3 +1,5 @@
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# No default testpaths: tests/unit and tests/integration require different,
+# mutually-exclusive dependency sets (see README) and must be run explicitly,
+# e.g. `pytest tests/unit` or `pytest tests/integration`.
 pythonpath = ["src"]

@@ -1,38 +1,88 @@
 # databricks-test-agentic
 
-A PySpark connector to a Databricks workspace, plus a pytest suite of
-industry-standard data pipeline test scenarios, wired up as a Claude Code
-project with sub agents and a skill.
+A PySpark connector to a Databricks workspace, a layered ETL/data-pipeline
+test suite following industry-standard practice, and a Claude Code project
+(sub agents + a skill) for running and extending it. See `CLAUDE.md` for how
+Claude Code should work in this repo.
+
+## The testing layers
+
+Each layer catches a different kind of failure; no single tool covers all of
+them.
+
+| Layer | What | Where | Needs |
+|---|---|---|---|
+| 1. Unit | Pure transform functions (`DataFrame -> DataFrame`), local Spark | `tests/unit/` | `requirements-unit.txt`, no Databricks |
+| 2. Integration | Connectivity, schema drift, data quality, freshness, roundtrip, referential integrity | `tests/integration/` | `requirements.txt`, a real workspace |
+| 3. In-pipeline expectations | Lakeflow Declarative Pipelines constraints, enforced on every production load | `pipelines/*.sql` | Deployed as a pipeline, not run by pytest |
+| 4. Reconciliation | Delta time-travel control-total comparisons | `tests/integration/test_reconciliation.py` | Same as Layer 2 |
+| 5. Streaming | `availableNow` triggers, checkpoint recovery, idempotent MERGE | `tests/integration/test_streaming.py` | Same as Layer 2 |
+
+**Layer 1 and Layers 2/4/5 must run in separate Python environments.**
+Databricks Connect replaces the `pyspark` package with a remote-only client,
+so it cannot be installed alongside plain `pyspark` (which Layer 1 needs for
+a local, no-cluster SparkSession).
 
 ## Setup
 
 ```bash
+# Integration/reconciliation/streaming tests (Layers 2, 4, 5) — needs a real workspace
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # fill in your workspace host/token/compute
+
+# Unit tests (Layer 1) — separate venv, no workspace needed
+python3 -m venv .venv-unit && source .venv-unit/bin/activate
+pip install -r requirements-unit.txt
 ```
 
 ## Running the tests
 
 ```bash
-pytest tests/ -v
+# Layer 1 — no credentials needed, runs anywhere
+source .venv-unit/bin/activate && pytest tests/unit -v
+
+# Layers 2/4/5 — skips cleanly (exit 0) without a configured .env,
+# runs for real once .env is filled in
+source .venv/bin/activate && pytest tests/integration -v
 ```
 
-Without a configured `.env`, the whole suite skips cleanly (exit code 0) so
-it's safe to run in CI or a sandbox with no credentials. Once `.env` is
-filled in, the suite runs against `samples.nyctaxi.trips` (present in every
-Unity Catalog-enabled workspace) plus a scratch table under
-`DBX_TEST_CATALOG.DBX_TEST_SCHEMA`.
+`tests/integration` runs against `samples.nyctaxi.trips` (present in every
+Unity Catalog-enabled workspace) plus the seeded structure and scratch
+tables under `DBX_TEST_CATALOG.DBX_TEST_SCHEMA`.
 
 ## What's tested
 
+**Layer 1 — unit** (`tests/unit/test_transforms.py`): `normalize_prices`,
+`flag_high_value_orders`, `dedupe_by_key` — pure functions in
+`src/dbx_tests/transforms.py`, checked with `pyspark.testing.assertDataFrameEqual`.
+
+**Layer 2 — integration** (`tests/integration/`):
 - **Connectivity** (`test_connectivity.py`) — can connect, list catalogs/schemas.
 - **Schema validation** (`test_schema_validation.py`) — column names/types match a pinned expected schema; catches schema drift.
 - **Data quality** (`test_data_quality.py`) — null rates, value ranges, duplicate rows.
 - **Row-count reconciliation** (`test_row_count_reconciliation.py`) — partitioned counts sum to the total.
 - **Freshness** (`test_freshness.py`) — data isn't older than an SLA window.
 - **Write/read roundtrip** (`test_write_read_roundtrip.py`) — data written to a scratch table reads back unchanged.
-- **Referential integrity** (`test_referential_integrity.py`) — FK-style checks (every order has a valid customer, etc.) against the seeded sample structure below.
+- **Referential integrity** (`test_referential_integrity.py`) — FK-style checks against the seeded sample structure below.
+
+**Layer 3 — in-pipeline expectations** (`pipelines/orders_clean_expectations.sql`):
+a Lakeflow Declarative Pipelines example with `EXPECT` constraints and
+`ON VIOLATION DROP ROW` / `FAIL UPDATE` clauses. Deployed with the pipeline,
+not run by pytest — this is what protects production data on every load.
+[DQX](https://github.com/databrickslabs/dqx) (Databricks Labs) is an
+alternative worth knowing for quarantine/annotate-style checks with a rule
+profiler, but it's an unsupported Labs project and isn't wired into this
+repo.
+
+**Layer 4 — reconciliation** (`tests/integration/test_reconciliation.py`):
+compares Delta table versions via time travel to prove a change didn't alter
+control totals it shouldn't have.
+
+**Layer 5 — streaming** (`tests/integration/test_streaming.py`):
+`availableNow` trigger draining, checkpoint-recovery duplicate detection,
+and the "MERGE fails on duplicate source keys" bug class (and its fix via
+`dedupe_by_key`).
 
 ## Sample data & structure
 
@@ -48,16 +98,25 @@ exists, every order_item's `order_id` exists) and reproducible (fixed random
 seed). Seeding is idempotent — each run overwrites the tables from scratch.
 
 It runs **automatically**: the `seeded_tables` pytest fixture calls `seed()`
-once per test session the first time a test needs it (currently
-`test_referential_integrity.py`). To populate it standalone, e.g. to browse
-the tables in the workspace UI without running the test suite:
+once per test session the first time a test needs it. To populate it
+standalone, e.g. to browse the tables in the workspace UI without running
+the test suite:
 
 ```bash
 python -m dbx_tests.sample_data
 ```
+
+## CI mapping
+
+- **Pull request:** Layer 1 unit tests — local, seconds, no cluster.
+- **Merge to main:** Layer 2 integration tests against a test workspace/catalog.
+- **Nightly:** Layer 4 reconciliation at realistic data volume.
+- **Every production load:** Layer 3 expectations, running inside the pipeline itself.
 
 ## Claude Code integration
 
 - `/databricks-tests` — checks config, runs the suite, summarizes results.
 - **databricks-test-runner** sub agent — runs the suite and diagnoses failures (auth vs schema drift vs real data-quality issues).
 - **databricks-test-writer** sub agent — scaffolds a new test module for another table, following the patterns above.
+
+See `CLAUDE.md` for repo conventions.

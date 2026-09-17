@@ -1,0 +1,13 @@
+# Layer 1 (tests/unit/): plain PySpark for local, no-cluster unit tests.
+#
+# Databricks Connect and PySpark cannot be installed in the same Python
+# environment (Databricks Connect replaces the pyspark package with a
+# remote-only client) — install this in a SEPARATE venv from requirements.txt.
+pyspark[sql]>=4.0,<5
+pytest>=8
+
+# pandas is pinned: pyspark's pandas-on-Spark compat layer (a transitive
+# import of pyspark.testing.assertDataFrameEqual) imports a private pandas
+# symbol removed in pandas>=2.2 as of pyspark 4.0.1. If a pyspark upgrade
+# drops this requirement, this pin can be relaxed.
+pandas==2.1.4
