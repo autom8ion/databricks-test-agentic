@@ -6,3 +6,7 @@ python-dotenv>=1
 # (src/dbx_tests/bulk_data.py) — plain-Python row-by-row generation
 # (sample_data.py) doesn't scale to hundreds of thousands of rows.
 polars>=1
+
+# Fuzzy-match data validation (src/dbx_tests/fuzzy.py) — catches near-duplicate
+# records and mistyped categorical values that exact comparison misses.
+rapidfuzz>=3

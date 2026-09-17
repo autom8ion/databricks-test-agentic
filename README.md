@@ -77,6 +77,7 @@ Run with coverage: `pytest tests/unit --cov=dbx_tests --cov-report=term-missing`
 - **Freshness** (`test_freshness.py`) — data isn't older than an SLA window.
 - **Write/read roundtrip** (`test_write_read_roundtrip.py`) — data written to a scratch table reads back unchanged.
 - **Referential integrity** (`test_referential_integrity.py`) — FK-style checks against the seeded sample structure below.
+- **Fuzzy validation** (`test_fuzzy.py`, [rapidfuzz](https://github.com/rapidfuzz/RapidFuzz)) — typo'd categorical values (e.g. `"shiped"` vs `"shipped"`) and near-duplicate records (e.g. two customers whose names are a typo of each other) that exact `distinct()`/set-membership checks can't catch.
 
 **Layer 3 — in-pipeline expectations** (`pipelines/orders_clean_expectations.sql`):
 a Lakeflow Declarative Pipelines example with `EXPECT` constraints and
@@ -134,6 +135,7 @@ specific gap rather than by default:
 - **[syrupy](https://github.com/tophat/syrupy)** — schema-contract snapshots for the pure transforms (Layer 1).
 - **[polars](https://pola.rs/)** — fast synthetic data generation at realistic volume for nightly reconciliation (Layer 4). Not used for the small-scale seed (`sample_data.py`) — plain Python is simpler and plenty fast at that size.
 - **pytest-cov** — coverage reporting for Layer 1 (`--cov=dbx_tests`).
+- **[rapidfuzz](https://github.com/rapidfuzz/RapidFuzz)** — fuzzy-match data validation (Layer 2, `src/dbx_tests/fuzzy.py`): typo'd categorical values and near-duplicate records that exact comparison misses. Chosen over fuzzywuzzy (unmaintained, GPL-licensed dependency) — rapidfuzz is the maintained MIT-licensed successor with a faster C++ core.
 
 Considered and deliberately **not** added:
 - **Great Expectations** — would duplicate what Layer 2 (plain `assert`) and Layer 3 (native Lakeflow expectations) already cover; see the rule in `.claude/agents/databricks-test-writer.md`. [DQX](https://github.com/databrickslabs/dqx) remains the noted alternative if a rule-profiler/quarantine workflow is ever needed.
@@ -143,6 +145,7 @@ Considered and deliberately **not** added:
 ## Claude Code integration
 
 - `/databricks-tests` — checks config, runs the suite, summarizes results.
+- `/diagnose-test-failure` — given one failing test, verdicts test-framework/infra issue vs. real data/pipeline bug, with evidence.
 - **databricks-test-runner** sub agent — runs the suite and diagnoses failures (auth vs schema drift vs real data-quality issues).
 - **databricks-test-writer** sub agent — scaffolds a new test module for another table, following the patterns above.
 

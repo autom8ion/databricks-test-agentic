@@ -50,6 +50,7 @@ file without re-running `pytest tests/unit` in a clean venv first.
 - **Scratch/throwaway tables get dropped in a `finally` block** by the test that created them (see `scratch_table` usage in `test_write_read_roundtrip.py`, `test_streaming.py`). Seeded structural tables (`seeded_tables`, `orders_bulk`) are not dropped — they're meant to persist for inspection and are idempotently overwritten on the next seed.
 - **A failing data-quality/referential-integrity/reconciliation test is often correct, not a bug in the test.** Don't loosen an assertion or threshold to make a failure go away without saying explicitly that's what you're doing and why it's the right call.
 - **Config always flows through `src/dbx_tests/config.py`** (env vars, loaded via `.env`). Never hardcode a host/token/catalog/schema in a test or script.
+- **Typo/near-duplicate checks on string columns reuse `src/dbx_tests/fuzzy.py`** (rapidfuzz-based `find_unmatched`/`find_near_duplicates`, see `test_fuzzy.py`) instead of a new ad-hoc similarity check — it's collect-then-compare Python, so keep it to distinct-value-sized inputs (hundreds, not millions of rows).
 - **Don't add Great Expectations, DQX, chispa, or Faker** without a concrete gap none of the existing tools cover — see "Library choices" in `README.md` for why each was already considered and left out.
 
 ## Claude Code project layout
@@ -57,6 +58,7 @@ file without re-running `pytest tests/unit` in a clean venv first.
 - `.claude/agents/databricks-test-runner.md` — runs `tests/integration` and diagnoses failures (auth vs schema drift vs real data-quality issues vs transient). Prefer delegating to it over manually re-running failing tests.
 - `.claude/agents/databricks-test-writer.md` — scaffolds new integration test modules following existing patterns and fixtures.
 - `.claude/skills/databricks-tests/SKILL.md` — `/databricks-tests`, the orchestration entry point (check config → seed if needed → run → summarize → hand off on failure).
+- `.claude/skills/diagnose-test-failure/SKILL.md` — `/diagnose-test-failure`, given one failing test (name/traceback/pytest output), verdicts framework/infra issue vs. real data/pipeline bug.
 
 ## Verifying a change
 
