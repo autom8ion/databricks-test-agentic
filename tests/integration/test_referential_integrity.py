@@ -8,6 +8,16 @@ def test_customer_ids_are_unique(spark, seeded_tables):
     assert customers.count() == customers.select("customer_id").distinct().count()
 
 
+def test_order_ids_are_unique(spark, seeded_tables):
+    orders = spark.table(seeded_tables["orders"])
+    assert orders.count() == orders.select("order_id").distinct().count()
+
+
+def test_order_item_ids_are_unique(spark, seeded_tables):
+    order_items = spark.table(seeded_tables["order_items"])
+    assert order_items.count() == order_items.select("order_item_id").distinct().count()
+
+
 def test_every_order_has_a_valid_customer(spark, seeded_tables):
     orders = spark.table(seeded_tables["orders"])
     customers = spark.table(seeded_tables["customers"])

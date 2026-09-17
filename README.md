@@ -73,11 +73,11 @@ Run with coverage: `pytest tests/unit --cov=dbx_tests --cov-report=term-missing`
 **Layer 2 — integration** (`tests/integration/`):
 - **Connectivity** (`test_connectivity.py`) — can connect, list catalogs/schemas.
 - **Schema validation** (`test_schema_validation.py`) — column names/types match a pinned expected schema; catches schema drift.
-- **Data quality** (`test_data_quality.py`) — null rates, value ranges, duplicate rows.
+- **Data quality** (`test_data_quality.py`) — null rates, value ranges, duplicate rows, against both the read-only nyctaxi sample and the pipeline's own seeded customers/orders/order_items (email format, non-negative amounts, positive quantities, etc.).
 - **Row-count reconciliation** (`test_row_count_reconciliation.py`) — partitioned counts sum to the total.
 - **Freshness** (`test_freshness.py`) — data isn't older than an SLA window.
 - **Write/read roundtrip** (`test_write_read_roundtrip.py`) — data written to a scratch table reads back unchanged.
-- **Referential integrity** (`test_referential_integrity.py`) — FK-style checks against the seeded sample structure below.
+- **Referential integrity** (`test_referential_integrity.py`) — primary-key uniqueness (customer/order/order_item ids) and FK-style checks against the seeded sample structure below.
 - **Fuzzy validation** (`test_fuzzy.py`, [rapidfuzz](https://github.com/rapidfuzz/RapidFuzz)) — typo'd categorical values (e.g. `"shiped"` vs `"shipped"`) and near-duplicate records (e.g. two customers whose names are a typo of each other) that exact `distinct()`/set-membership checks can't catch.
 
 **Layer 3 — in-pipeline expectations** (`pipelines/orders_clean_expectations.sql`):
