@@ -15,10 +15,18 @@ catches the failure, don't default to Layer 2 for everything.
 
 `requirements.txt` (Databricks Connect) and `requirements-unit.txt` (plain
 PySpark) cannot be installed in the same virtualenv — Databricks Connect
-replaces the `pyspark` package with a remote-only client. Concretely:
+replaces the `pyspark` package with a remote-only client. Both are managed
+with [uv](https://docs.astral.sh/uv/) as two separate `uv venv` + `uv pip
+install` environments, **not** a single `uv sync`/`uv.lock` project: a
+shared lock forces one dependency resolution to satisfy both files, and
+`requirements-unit.txt`'s exact `pandas==2.1.4` pin then gets pulled into
+the integration env too, where it has no prebuilt wheel and fails to build
+from source. If you're tempted to add a `[project]`/`[dependency-groups]`
+table to `pyproject.toml` to "properly" manage this as one uv project,
+don't — this was tried and reverted for exactly that reason.
 
-- Editing/running `tests/unit/**` → use `.venv-unit` (`pip install -r requirements-unit.txt`).
-- Editing/running `tests/integration/**` or `src/dbx_tests/{connector,sample_data}.py` → use `.venv` (`pip install -r requirements.txt`).
+- Editing/running `tests/unit/**` → use `.venv-unit` (`uv venv .venv-unit --python 3.12 && uv pip install -r requirements-unit.txt`).
+- Editing/running `tests/integration/**` or `src/dbx_tests/{connector,sample_data}.py` → use `.venv` (`uv venv .venv && uv pip install -r requirements.txt`).
 - Never add a bare `pyspark` dependency to `requirements.txt`, and never add `databricks-connect` to `requirements-unit.txt`.
 - `pyproject.toml` deliberately has no default `testpaths` — always run `pytest tests/unit` or `pytest tests/integration` explicitly, never bare `pytest`.
 
@@ -45,5 +53,5 @@ as of pyspark 4.0.1. Don't loosen that pin without re-running
 
 ## Verifying a change
 
-- Transform logic (`src/dbx_tests/transforms.py`) or `tests/unit/**`: `source .venv-unit/bin/activate && pytest tests/unit -v`.
+- Transform logic (`src/dbx_tests/transforms.py`) or `tests/unit/**`: `source .venv-unit/bin/activate && pytest tests/unit -v` (create the venv first if it doesn't exist: see setup commands above).
 - Connector, config, sample data, or `tests/integration/**`: `source .venv/bin/activate && pytest tests/integration -v` — should show all-skipped without a configured `.env`, and should actually exercise the assertions once one is set up. If you don't have a live workspace to test against, say so rather than claiming the integration suite passed.

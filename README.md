@@ -25,16 +25,24 @@ a local, no-cluster SparkSession).
 
 ## Setup
 
+Uses [uv](https://docs.astral.sh/uv/) to manage both environments.
+
 ```bash
 # Integration/reconciliation/streaming tests (Layers 2, 4, 5) — needs a real workspace
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv venv .venv && source .venv/bin/activate
+uv pip install -r requirements.txt
 cp .env.example .env   # fill in your workspace host/token/compute
 
 # Unit tests (Layer 1) — separate venv, no workspace needed
-python3 -m venv .venv-unit && source .venv-unit/bin/activate
-pip install -r requirements-unit.txt
+uv venv .venv-unit --python 3.12 && source .venv-unit/bin/activate
+uv pip install -r requirements-unit.txt
 ```
+
+These are deliberately two independent `uv pip install` calls, not one `uv
+sync`/`uv.lock` project — Databricks Connect and plain PySpark have
+incompatible pinned dependencies (see the pandas note in
+`requirements-unit.txt`), so resolving them together would force one
+resolution to satisfy both and break the other.
 
 ## Running the tests
 
