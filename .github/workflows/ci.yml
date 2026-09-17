@@ -34,7 +34,13 @@ jobs:
       - name: Run unit tests
         run: |
           source .venv-unit/bin/activate
-          pytest tests/unit -v --cov=dbx_tests --cov-report=term-missing
+          pytest tests/unit -v --cov=dbx_tests --cov-report=term-missing --html=report.html --self-contained-html
+      - name: Upload HTML test report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unit-test-report
+          path: report.html
 
   integration:
     name: Integration tests (Layer 2/4)
@@ -60,7 +66,13 @@ jobs:
         # without DBX_TESTS_RUN_BULK/DBX_TESTS_RUN_PERF - nightly job's job.
         run: |
           source .venv/bin/activate
-          pytest tests/integration -v
+          pytest tests/integration -v --html=report.html --self-contained-html
+      - name: Upload HTML test report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: integration-test-report
+          path: report.html
 
   nightly:
     name: Nightly (Layer 4 bulk + Layer 6 performance)
@@ -85,4 +97,10 @@ jobs:
       - name: Run nightly bulk reconciliation + performance tests
         run: |
           source .venv/bin/activate
-          pytest tests/integration/test_reconciliation_bulk.py tests/integration/test_performance.py -v
+          pytest tests/integration/test_reconciliation_bulk.py tests/integration/test_performance.py -v --html=report.html --self-contained-html
+      - name: Upload HTML test report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-test-report
+          path: report.html

@@ -12,5 +12,6 @@
 pyspark[sql]>=4.2,<5
 pytest>=8
 pytest-cov>=5          # coverage reporting: pytest --cov=dbx_tests
+pytest-html>=4          # self-contained HTML test report, uploaded as a CI artifact
 hypothesis>=6           # property-based tests, see test_transforms_properties.py
 syrupy>=4               # schema-contract snapshots, see test_transform_contracts.py

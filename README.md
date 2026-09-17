@@ -149,6 +149,12 @@ have serverless enabled. Without the secrets set, `integration`/`nightly`
 runs will show all tests skipped (same behavior as running locally without
 `.env`), not fail.
 
+Each job also uploads a self-contained HTML test report ([pytest-html](https://pytest-html.readthedocs.io/))
+as a workflow artifact (`unit-test-report`/`integration-test-report`/`nightly-test-report`),
+even when tests fail — find it on the run's summary page under **Artifacts**,
+download and open `report.html` locally for a browsable pass/fail breakdown
+per test (nicer than scrolling raw log output).
+
 ## Library choices
 
 Added beyond the base `pytest`/Databricks Connect/PySpark stack, each for a

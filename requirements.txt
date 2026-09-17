@@ -1,5 +1,6 @@
 databricks-connect>=15.4,<16
 pytest>=8
+pytest-html>=4          # self-contained HTML test report, uploaded as a CI artifact
 python-dotenv>=1
 
 # Fast vectorized synthetic data generation for realistic-volume testing
