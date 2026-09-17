@@ -1,0 +1,97 @@
+name: CI
+
+# Mirrors README's "CI mapping":
+#   pull request  -> Layer 1 (unit) only, no Databricks needed
+#   push to main  -> Layer 1, then Layer 2 (+ small-scale Layer 4 reconciliation)
+#                    against a real workspace
+#   nightly/manual -> Layer 4 at realistic volume + Layer 6 (performance/SLA)
+# Layer 3 (pipelines/*.sql) is deployed with the pipeline, not run here.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *" # nightly, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit tests (Layer 1)
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Set up .venv-unit
+        run: |
+          uv python install 3.14
+          uv venv .venv-unit --python 3.14
+          uv pip install -p .venv-unit -r requirements-unit.txt
+      - name: Run unit tests
+        run: |
+          source .venv-unit/bin/activate
+          pytest tests/unit -v --cov=dbx_tests --cov-report=term-missing
+
+  integration:
+    name: Integration tests (Layer 2/4)
+    needs: unit
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      DATABRICKS_SERVERLESS: "1"
+      DBX_TEST_CATALOG: ${{ vars.DBX_TEST_CATALOG || 'main' }}
+      DBX_TEST_SCHEMA: ${{ vars.DBX_TEST_SCHEMA || 'default' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Set up .venv
+        run: |
+          uv python install 3.14
+          uv venv .venv --python 3.14
+          uv pip install -p .venv -r requirements.txt
+      - name: Run integration tests
+        # test_reconciliation_bulk.py and test_performance.py self-skip
+        # without DBX_TESTS_RUN_BULK/DBX_TESTS_RUN_PERF - nightly job's job.
+        run: |
+          source .venv/bin/activate
+          pytest tests/integration -v
+
+  nightly:
+    name: Nightly (Layer 4 bulk + Layer 6 performance)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      DATABRICKS_SERVERLESS: "1"
+      DBX_TEST_CATALOG: ${{ vars.DBX_TEST_CATALOG || 'main' }}
+      DBX_TEST_SCHEMA: ${{ vars.DBX_TEST_SCHEMA || 'default' }}
+      DBX_TESTS_RUN_BULK: "1"
+      DBX_TESTS_RUN_PERF: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Set up .venv
+        run: |
+          uv python install 3.14
+          uv venv .venv --python 3.14
+          uv pip install -p .venv -r requirements.txt
+      - name: Run nightly bulk reconciliation + performance tests
+        run: |
+          source .venv/bin/activate
+          pytest tests/integration/test_reconciliation_bulk.py tests/integration/test_performance.py -v

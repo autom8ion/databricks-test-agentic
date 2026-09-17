@@ -136,6 +136,19 @@ python -m dbx_tests.sample_data
 - **Nightly:** `test_reconciliation_bulk.py` (`DBX_TESTS_RUN_BULK=1`) — Layer 4 at realistic data volume; `test_performance.py` (`DBX_TESTS_RUN_PERF=1`) — Layer 6 SLA checks.
 - **Every production load:** Layer 3 expectations, running inside the pipeline itself.
 
+Implemented as `.github/workflows/ci.yml` (three jobs — `unit`, `integration`,
+`nightly` — gated by `if:` on the triggering event, matching the mapping
+above). The `integration` and `nightly` jobs need workspace access, configured
+as repo-level GitHub Actions config rather than a committed `.env`:
+- **Secrets** (Settings → Secrets and variables → Actions → *Secrets*): `DATABRICKS_HOST`, `DATABRICKS_TOKEN`.
+- **Variables** (same page → *Variables*, optional): `DBX_TEST_CATALOG`, `DBX_TEST_SCHEMA` — default to `main`/`default` (see `.env.example`) if unset.
+
+Compute is hardcoded to serverless (`DATABRICKS_SERVERLESS=1`) in the
+workflow; switch to `DATABRICKS_CLUSTER_ID` there if your workspace doesn't
+have serverless enabled. Without the secrets set, `integration`/`nightly`
+runs will show all tests skipped (same behavior as running locally without
+`.env`), not fail.
+
 ## Library choices
 
 Added beyond the base `pytest`/Databricks Connect/PySpark stack, each for a

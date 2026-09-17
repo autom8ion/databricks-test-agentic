@@ -61,6 +61,7 @@ file without re-running `pytest tests/unit` in a clean venv first.
 - `.claude/skills/databricks-tests/SKILL.md` — `/databricks-tests`, the orchestration entry point (check config → seed if needed → run → summarize → hand off on failure).
 - `.claude/skills/diagnose-test-failure/SKILL.md` — `/diagnose-test-failure`, given one failing test (name/traceback/pytest output), verdicts framework/infra issue vs. real data/pipeline bug.
 - `.claude/skills/databricks-performance-test/SKILL.md` — `/databricks-performance-test`, runs Layer 6 (`test_performance.py`) and interprets duration-vs-SLA results, including cold-start-vs-regression triage.
+- `.github/workflows/ci.yml` — GitHub Actions: unit tests on PR, integration on push to main, bulk reconciliation + performance nightly (see README's "CI mapping" for the required repo secrets/variables).
 
 ## Verifying a change
 
