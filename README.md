@@ -17,6 +17,7 @@ them.
 | 3. In-pipeline expectations | Lakeflow Declarative Pipelines constraints, enforced on every production load | `pipelines/*.sql` | Deployed as a pipeline, not run by pytest |
 | 4. Reconciliation | Delta time-travel control-total comparisons, at both small and realistic (polars-generated) volume | `tests/integration/test_reconciliation*.py` | Same as Layer 2 |
 | 5. Streaming | `availableNow` triggers, checkpoint recovery, idempotent MERGE | `tests/integration/test_streaming.py` | Same as Layer 2 |
+| 6. Performance | Wall-clock duration of write/transform/query at realistic volume vs. an SLA | `tests/integration/test_performance.py` | Same as Layer 2, `DBX_TESTS_RUN_PERF=1` |
 
 **Layer 1 and Layers 2/4/5 must run in separate Python environments.**
 Databricks Connect replaces the `pyspark` package with a remote-only client,
@@ -98,6 +99,14 @@ to prove a change didn't alter control totals it shouldn't have.
 and the "MERGE fails on duplicate source keys" bug class (and its fix via
 `dedupe_by_key`).
 
+**Layer 6 — performance** (`tests/integration/test_performance.py`): times
+bulk write, a transform, and an aggregation query at realistic volume (500k
+orders, `src/dbx_tests/bulk_data.py`) against wall-clock SLA constants —
+catches a transform gone quadratic or a write/query that stopped pruning
+partitions, not just wrong output. Skipped unless `DBX_TESTS_RUN_PERF=1` —
+nightly-tier like `test_reconciliation_bulk.py`, not every merge:
+`DBX_TESTS_RUN_PERF=1 pytest tests/integration/test_performance.py -v`.
+
 ## Sample data & structure
 
 `src/dbx_tests/sample_data.py` seeds a small, realistic e-commerce schema into
@@ -124,7 +133,7 @@ python -m dbx_tests.sample_data
 
 - **Pull request:** Layer 1 unit tests — local, seconds, no cluster.
 - **Merge to main:** Layer 2 integration tests (plus the small-scale `test_reconciliation.py`) against a test workspace/catalog.
-- **Nightly:** `test_reconciliation_bulk.py` (`DBX_TESTS_RUN_BULK=1`) — Layer 4 at realistic data volume.
+- **Nightly:** `test_reconciliation_bulk.py` (`DBX_TESTS_RUN_BULK=1`) — Layer 4 at realistic data volume; `test_performance.py` (`DBX_TESTS_RUN_PERF=1`) — Layer 6 SLA checks.
 - **Every production load:** Layer 3 expectations, running inside the pipeline itself.
 
 ## Library choices
@@ -146,6 +155,7 @@ Considered and deliberately **not** added:
 
 - `/databricks-tests` — checks config, runs the suite, summarizes results.
 - `/diagnose-test-failure` — given one failing test, verdicts test-framework/infra issue vs. real data/pipeline bug, with evidence.
+- `/databricks-performance-test` — runs Layer 6, reports measured durations vs. SLA, and distinguishes cold-start noise from a reproducible regression.
 - **databricks-test-runner** sub agent — runs the suite and diagnoses failures (auth vs schema drift vs real data-quality issues).
 - **databricks-test-writer** sub agent — scaffolds a new test module for another table, following the patterns above.
 

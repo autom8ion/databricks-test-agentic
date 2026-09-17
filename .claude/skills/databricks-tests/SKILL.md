@@ -21,7 +21,7 @@ wants — "run the tests" with no other signal means run both.
 1. **Check configuration.** Confirm `.env` exists (copy from `.env.example` if not) and that `DATABRICKS_HOST` / `DATABRICKS_TOKEN` / compute (`DATABRICKS_SERVERLESS` or `DATABRICKS_CLUSTER_ID`) are set. If not configured, tell the user the suite will run but every test will skip, and point them at `.env.example`.
 2. `uv venv .venv && source .venv/bin/activate` (skip if it exists), `uv pip install -r requirements.txt`.
 3. **Seed sample data if needed.** `test_referential_integrity.py` and `test_reconciliation.py` (and anything else using the `seeded_tables` fixture) automatically populate `customers`/`orders`/`order_items` in `DBX_TEST_CATALOG.DBX_TEST_SCHEMA` on first use via `dbx_tests.sample_data.seed()` — no manual step required. To (re-)populate it standalone, run `python -m dbx_tests.sample_data`.
-4. **Run the suite**: `pytest tests/integration -v` from the repo root. This excludes `test_reconciliation_bulk.py` by default (it needs `DBX_TESTS_RUN_BULK=1` — it seeds ~500k rows with polars and is meant for a nightly job, not routine runs; only run it if the user explicitly asks for the realistic-volume/nightly check).
+4. **Run the suite**: `pytest tests/integration -v` from the repo root. This excludes `test_reconciliation_bulk.py` and `test_performance.py` by default (they need `DBX_TESTS_RUN_BULK=1` / `DBX_TESTS_RUN_PERF=1` respectively — both are nightly-tier, not routine runs; only run one if the user explicitly asks for the realistic-volume/reconciliation or performance/SLA check — for the latter, hand off to `/databricks-performance-test` for the duration-vs-SLA interpretation).
 
 ## Wrapping up
 
