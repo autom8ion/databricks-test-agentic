@@ -10,9 +10,11 @@ pipeline, not batch tests:
     deduped first or fail loudly, never silently corrupt the target.
 """
 
+import uuid
+
 import pytest
+from pyspark.errors import PySparkException
 from pyspark.sql import Row
-from pyspark.sql.utils import AnalysisException
 
 from dbx_tests.transforms import dedupe_by_key
 
@@ -27,9 +29,16 @@ def stream_source_table(spark, dbx_config):
 
 
 @pytest.fixture
-def stream_sink_table_and_checkpoint(dbx_config):
+def stream_sink_table_and_checkpoint(spark, dbx_config):
     sink = f"{dbx_config.catalog}.{dbx_config.schema}.dbx_tests_stream_sink"
-    checkpoint = f"/tmp/dbx_tests_checkpoints/{dbx_config.schema}_stream_sink"
+    # Checkpoints must live in a Unity Catalog Volume, not DBFS root
+    # (/tmp/...) - many workspaces disable the public DBFS root. A UUID
+    # subpath keeps each test run isolated: a fixed path would let one
+    # test's leftover checkpoint state leak into the next test/run that
+    # reuses this fixture.
+    volume = f"{dbx_config.catalog}.{dbx_config.schema}.dbx_tests_checkpoints"
+    spark.sql(f"CREATE VOLUME IF NOT EXISTS {volume}")
+    checkpoint = f"/Volumes/{dbx_config.catalog}/{dbx_config.schema}/dbx_tests_checkpoints/{uuid.uuid4().hex}"
     yield sink, checkpoint
 
 
@@ -86,7 +95,10 @@ def test_merge_fails_on_duplicate_source_keys(spark, dbx_config):
     duplicate_source.createOrReplaceTempView("dbx_tests_dup_source")
 
     try:
-        with pytest.raises(AnalysisException):
+        # Databricks Connect raises UnsupportedOperationException for this
+        # Delta error, not AnalysisException - they're siblings under
+        # PySparkException, not a subclass relationship, so catch the base.
+        with pytest.raises(PySparkException):
             spark.sql(
                 f"MERGE INTO {target} t USING dbx_tests_dup_source s ON t.order_id = s.order_id "
                 "WHEN MATCHED THEN UPDATE SET t.amount = s.amount "

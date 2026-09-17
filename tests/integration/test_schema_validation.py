@@ -11,7 +11,10 @@ EXPECTED_SCHEMA = {
 
 
 def test_columns_match_expected_schema(spark, sample_table):
-    actual = {f.name: f.dataType.typeName() for f in spark.table(sample_table).schema.fields}
+    # simpleString() gives the short SQL type name ("int", "double", ...)
+    # matching EXPECTED_SCHEMA below; typeName() would return "integer" and
+    # never match, flagging drift that isn't there.
+    actual = {f.name: f.dataType.simpleString() for f in spark.table(sample_table).schema.fields}
     assert actual == EXPECTED_SCHEMA, f"schema drift detected: {actual} != {EXPECTED_SCHEMA}"
 
 
